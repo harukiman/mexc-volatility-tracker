@@ -297,18 +297,21 @@ def main():
         if s is not None:
             signals.append(s)
 
-    # 閾値 30 以上を採択（少なくとも 2-3 ポジティブ要因あり）
+    # v6 (2026-05-31): バックテスト結果より閾値 30→55 に厳格化
+    # score 30-50 は取引コスト 0.04% を超えるエッジなし (累積 -97%、 Sharpe -6.09)
+    # score 55+ のみが statistically significant alpha (累積 +83%、 Sharpe +7.28)
+    SCORE_THRESHOLD = 55
     long_top = sorted(
-        [s for s in signals if s['long_score'] >= 30],
+        [s for s in signals if s['long_score'] >= SCORE_THRESHOLD],
         key=lambda x: (x['long_score'], x['long_ev']['central']),
         reverse=True
     )[:10]
     short_top = sorted(
-        [s for s in signals if s['short_score'] >= 30],
+        [s for s in signals if s['short_score'] >= SCORE_THRESHOLD],
         key=lambda x: (x['short_score'], abs(x['short_ev']['central'])),
         reverse=True
     )[:10]
-    print(f'  signals computed: total={len(signals)}, long(>=30)={len(long_top)}, short(>=30)={len(short_top)}')
+    print(f'  signals computed: total={len(signals)}, long(>={SCORE_THRESHOLD})={len(long_top)}, short(>={SCORE_THRESHOLD})={len(short_top)}')
     if signals:
         max_l = max(signals, key=lambda x: x['long_score'])
         max_s = max(signals, key=lambda x: x['short_score'])
@@ -354,7 +357,8 @@ def main():
         'signals': {
             'long': long_top,
             'short': short_top,
-            'methodology': '24h trend + funding rate + multi-TF vol acceleration + liquidity を統合した複合スコア (0-100)。 期待値 = ATR(1h) × 確信度係数。',
+            'threshold': SCORE_THRESHOLD,
+            'methodology': 'v6 (2026-05-31): バックテスト 90,054 trade を元に閾値を 30→55 に厳格化。 score >=55 で過去 1 年 Sharpe +7.28 / 累積 +83% / 533 trade。 score <55 はコスト 0.04% を超えるエッジなし (累積 -97%、 Sharpe -6.09)。 核心エッジは accel タグ (5m>15m>1h vol 加速)。',
         },
         'runtime_sec': round(time.time() - started, 1),
     }

@@ -208,7 +208,7 @@
   <div class="tab-content" id="tab-signals">
     <div class="tf-section" style="border:2px solid var(--up);">
       <div class="tf-title">
-        <span style="color:var(--up);">🟢 LONG 候補銘柄（スコア 30 以上）</span>
+        <span style="color:var(--up);">🟢 LONG 候補銘柄（スコア 55 以上 (v6 厳格化)）</span>
         <span class="tf-meta">複合シグナル + ATR(1h) ベース期待値</span>
       </div>
       <div id="signal-long-content" style="font-size:13px;color:var(--muted);padding:12px;">
@@ -217,12 +217,22 @@
     </div>
     <div class="tf-section" style="border:2px solid var(--down);">
       <div class="tf-title">
-        <span style="color:var(--down);">🔴 SHORT 候補銘柄（スコア 30 以上）</span>
+        <span style="color:var(--down);">🔴 SHORT 候補銘柄（スコア 55 以上 (v6 厳格化)）</span>
         <span class="tf-meta">複合シグナル + ATR(1h) ベース期待値</span>
       </div>
       <div id="signal-short-content" style="font-size:13px;color:var(--muted);padding:12px;">
         データ取得後に表示されます。
       </div>
+    </div>
+    <div class="tf-section" style="background:rgba(63,185,80,0.06);border-color:var(--up);">
+      <div class="tf-title"><span style="color:var(--up);">✓ v6 バックテスト実証</span></div>
+      <ul style="margin:8px 0 0 20px;font-size:13px;color:var(--muted);line-height:1.8;">
+        <li>過去 1 年 (2025-06〜2026-05)、 90,054 trade で実検証済み</li>
+        <li><strong style="color:var(--up);">score 55+ のみ: Sharpe +7.28 / 累積 +83% / 533 trade</strong></li>
+        <li><strong style="color:var(--down);">score 30-50 (除外): Sharpe -6.09 / 累積 -97%</strong> — 取引コスト 0.04% を超えるエッジなし</li>
+        <li>核心エッジ: <code>accel</code> タグ (5m vol &gt; 15m vol &gt; 1h vol = vol 加速)</li>
+        <li>推奨条件: <code>accel + uptrend + liq+</code> 3 条件同時成立</li>
+      </ul>
     </div>
     <div class="tf-section" style="background:rgba(210,153,34,0.06);border-color:var(--warn);">
       <div class="tf-title"><span style="color:var(--warn);">⚠ 注意事項</span></div>
@@ -233,7 +243,8 @@
         <li>1 時間ホライズンの予測。 5 分以内の即時値動きは別物 (orderbook depth に依存)。</li>
         <li>必ず <strong>損切り (stop-loss) を ATR ベースで先に設定</strong>。 期待値は中央予測、 実現は分布する。</li>
         <li>FR 極端 / 低流動性 タグが付く銘柄はリスク高、 size 縮小推奨。</li>
-        <li>スコア 30〜40 = 弱信号 / 40〜60 = 中信号 / 60+ = 強信号。 強信号でも 100% ではない。</li>
+        <li>v6: 閾値 55 厳格化、 過去シグナル数の 0.6% のみが採択される (質重視)。</li>
+        <li>該当銘柄が 0 のことは普通 — 強信号が出る瞬間は稀。 焦らず待つ。</li>
       </ul>
     </div>
   </div>
@@ -306,14 +317,15 @@
         <div class="strat-step">③ 3 時間軸合致 = 数時間続く trend、 順張り保有時間長め可</div>
       </div>
 
-      <h3>パターン 6 — シグナルタブの自動推奨を使う</h3>
+      <h3>パターン 6 — シグナルタブの自動推奨を使う（v6 厳格化版）</h3>
       <div class="strat">
-        <div class="strat-name">⚡ シグナル タブで「LONG/SHORT 候補 + 期待値」 を直接取得</div>
-        <div class="strat-step">① タブ「⚡ シグナル」を開くと、 LONG/SHORT スコア 30 以上の銘柄が一覧</div>
-        <div class="strat-step">② スコア 60+ = 強信号 (複数要因が揃う) / 40-60 = 中信号 / 30-40 = 弱信号</div>
-        <div class="strat-step">③ 期待値は「中央」予測 (1 時間後の % 変動)。 ATR(1h) × スコア確信度で算出</div>
-        <div class="strat-step">④ 根拠タグで判断: <code>uptrend / accel / multi-tf / short-crowded</code> 等が良 / <code>illiq / overext</code> は警戒</div>
-        <div class="strat-step">⑤ 損切りは必ず ATR(1h) × 0.5 = 期待値の半分を逆方向に置く (R:R = 2:1 が最低限)</div>
+        <div class="strat-name">⚡ シグナル タブで score 55+ の高確信度シグナルのみ</div>
+        <div class="strat-step"><strong style="color:var(--up);">v6 (2026-05-31) バックテスト実証:</strong> 過去 1 年 90,054 trade 検証で score 30 閾値は -97% / Sharpe -6.09 だったため <strong>score 55 に厳格化</strong>。 score 55+ のみで Sharpe +7.28 / 累積 +83% の質的シグナル。</div>
+        <div class="strat-step">① 表示が 0 件のことは普通。 強信号の瞬間は 1 日に数銘柄程度</div>
+        <div class="strat-step">② 必須タグ: <code>accel</code> (vol 加速) ─ 過去 1 年で唯一エッジを持つ条件</div>
+        <div class="strat-step">③ 理想: <code>accel + uptrend + liq+</code> の 3 タグ同時 = 核心シグナル</div>
+        <div class="strat-step">④ 期待値「中央」 = 1 時間後の予想 % 変動 (ATR ベース)</div>
+        <div class="strat-step">⑤ 損切りは ATR(1h) × 0.5 = 期待値の半分を逆方向 (R:R = 2:1 が最低限)</div>
       </div>
 
       <h3>シグナル根拠タグの意味</h3>
