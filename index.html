@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<title>MEXC 先物 ボラティリティトラッカー</title>
+<title>MEXC 先物 デイトレード スキャナー</title>
 <style>
   :root {
     --bg: #0d1117;
@@ -17,127 +17,187 @@
     --up: #3fb950;
     --down: #f85149;
     --warn: #d29922;
+    --pink: #ff6b9d;
+    --purple: #bc8cff;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { background: var(--bg); color: var(--text); }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', 'Segoe UI', sans-serif;
-    line-height: 1.5;
-    padding: 24px 16px;
+    line-height: 1.5; padding: 20px 14px; font-size: 14px;
   }
-  .container { max-width: 1280px; margin: 0 auto; }
-  header { text-align: center; margin-bottom: 24px; }
-  h1 { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
-  .sub { color: var(--muted); font-size: 14px; }
+  .container { max-width: 1400px; margin: 0 auto; }
 
+  /* ヘッダー */
+  header { text-align: center; margin-bottom: 16px; }
+  h1 { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 13px; }
+
+  /* コントロール */
   .controls {
     display: flex; gap: 12px; justify-content: center; align-items: center;
-    flex-wrap: wrap;
-    margin: 24px 0;
+    flex-wrap: wrap; margin: 16px 0;
   }
   button.fetch {
     background: var(--accent); color: #fff; border: none;
-    padding: 14px 40px; border-radius: 8px;
-    font-size: 18px; font-weight: 700; cursor: pointer;
+    padding: 12px 36px; border-radius: 8px;
+    font-size: 16px; font-weight: 700; cursor: pointer;
     transition: opacity 0.2s;
   }
   button.fetch:hover { opacity: 0.85; }
   button.fetch:disabled { background: var(--muted); cursor: wait; }
+  button.secondary {
+    background: var(--card2); color: var(--text); border: 1px solid var(--border);
+    padding: 10px 18px; border-radius: 8px; font-size: 13px; cursor: pointer;
+  }
   .status {
-    color: var(--muted); font-size: 13px; min-height: 18px;
+    color: var(--muted); font-size: 12px; min-height: 16px;
   }
 
-  /* BTC/ETH 大型カード */
+  /* タブ */
+  .tabs {
+    display: flex; gap: 4px; border-bottom: 2px solid var(--border);
+    margin: 20px 0 0 0; flex-wrap: wrap;
+  }
+  .tab {
+    background: var(--card2); color: var(--muted); border: 1px solid var(--border);
+    border-bottom: none; padding: 10px 18px; border-radius: 8px 8px 0 0;
+    cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .tab.active { background: var(--card); color: var(--accent); border-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* BTC/ETH ヘッダー */
   .majors {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
-    margin: 24px 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin: 16px 0;
   }
   .major-card {
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-    padding: 20px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px;
   }
-  .major-name { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  .major-price { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
-  .major-changes { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
-  .major-change-item { display: flex; gap: 4px; }
-  .major-change-item .lbl { color: var(--muted); }
+  .major-row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  .major-name { font-size: 13px; color: var(--muted); }
+  .major-price { font-size: 22px; font-weight: 800; }
+  .major-changes {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+    margin-top: 10px; font-size: 11px;
+  }
+  .major-changes div { background: var(--card2); padding: 6px 8px; border-radius: 5px; }
+  .major-changes .lbl { color: var(--muted); display: block; font-size: 10px; }
+  .major-changes .val { font-weight: 700; font-size: 13px; }
+  .funding-info {
+    display: flex; gap: 10px; margin-top: 8px; font-size: 11px; color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .funding-info span { background: var(--card2); padding: 3px 8px; border-radius: 4px; }
+
   .up { color: var(--up); }
   .down { color: var(--down); }
+  .neutral { color: var(--muted); }
 
-  /* 全銘柄平均 */
-  .averages {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-    margin: 16px 0 24px;
+  /* 平均カード */
+  .avg-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    margin: 12px 0;
   }
   .avg-card {
     background: var(--card2); border: 1px solid var(--border); border-radius: 8px;
-    padding: 14px; text-align: center;
+    padding: 12px; text-align: center;
   }
-  .avg-tf { color: var(--muted); font-size: 12px; }
+  .avg-tf { color: var(--muted); font-size: 11px; }
   .avg-val { font-size: 20px; font-weight: 700; margin: 4px 0; }
-  .avg-n { color: var(--muted); font-size: 11px; }
+  .avg-n { color: var(--muted); font-size: 10px; }
 
-  /* 時間軸ごとの上位10 */
+  /* テーブル */
   .tf-section {
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-    padding: 20px; margin: 16px 0;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; margin: 12px 0;
   }
   .tf-title {
-    font-size: 18px; font-weight: 700; margin-bottom: 12px;
-    border-bottom: 2px solid var(--accent); padding-bottom: 6px;
+    font-size: 16px; font-weight: 700; margin-bottom: 10px;
+    border-bottom: 1px solid var(--accent); padding-bottom: 6px;
     display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 8px;
   }
-  .tf-meta { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .tf-meta { font-size: 11px; color: var(--muted); font-weight: 400; }
 
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { padding: 8px 10px; text-align: right; }
-  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 7px 8px; text-align: right; white-space: nowrap; }
+  th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
   thead tr { background: var(--card2); }
   thead th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
   tbody tr { border-bottom: 1px solid var(--border); }
   tbody tr:last-child { border-bottom: none; }
   tbody tr:hover { background: var(--card2); }
-  .rank { color: var(--muted); width: 30px; }
+  .rank { color: var(--muted); width: 28px; }
   .sym { font-weight: 700; }
   .vol-bar {
-    display: inline-block; height: 4px; background: var(--accent);
-    border-radius: 2px; vertical-align: middle; margin-left: 6px;
+    display: inline-block; height: 3px; background: var(--accent);
+    border-radius: 2px; vertical-align: middle; margin-left: 5px;
   }
+  .tag {
+    display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 3px;
+    background: var(--card2); border: 1px solid var(--border); margin-left: 4px;
+  }
+  .tag.hot { background: rgba(248, 81, 73, 0.15); border-color: var(--down); color: var(--down); }
+  .tag.cool { background: rgba(63, 185, 80, 0.15); border-color: var(--up); color: var(--up); }
+  .tag.warn { background: rgba(210, 153, 34, 0.15); border-color: var(--warn); color: var(--warn); }
 
   .err {
     background: rgba(248, 81, 73, 0.12); border: 1px solid var(--down);
-    color: var(--down); padding: 12px 16px; border-radius: 8px;
-    margin: 12px 0; font-size: 13px;
+    color: var(--down); padding: 10px 14px; border-radius: 6px;
+    margin: 10px 0; font-size: 12px;
   }
-
   .empty {
-    text-align: center; color: var(--muted); padding: 60px 20px;
-    background: var(--card); border: 1px dashed var(--border); border-radius: 12px;
-    margin: 16px 0;
+    text-align: center; color: var(--muted); padding: 40px 20px;
+    background: var(--card); border: 1px dashed var(--border); border-radius: 10px;
+    margin: 12px 0;
   }
-
-  /* スピナー */
   .spinner {
-    display: inline-block; width: 14px; height: 14px;
+    display: inline-block; width: 12px; height: 12px;
     border: 2px solid var(--muted); border-top-color: var(--accent);
     border-radius: 50%; animation: spin 0.8s linear infinite;
-    vertical-align: middle; margin-right: 6px;
+    vertical-align: middle; margin-right: 5px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  footer {
-    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
-    text-align: center; color: var(--muted); font-size: 12px;
+  /* 推奨使い方ガイド */
+  .guide {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; margin: 16px 0;
   }
+  .guide h2 {
+    font-size: 18px; font-weight: 700; margin-bottom: 12px;
+    border-bottom: 2px solid var(--purple); padding-bottom: 6px; color: var(--purple);
+  }
+  .guide h3 { font-size: 14px; font-weight: 700; margin: 14px 0 6px; color: var(--accent); }
+  .guide ul { padding-left: 22px; }
+  .guide li { margin-bottom: 4px; font-size: 13px; }
+  .guide code { background: var(--card2); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .guide .strat {
+    background: var(--card2); border-left: 3px solid var(--accent);
+    padding: 12px 16px; margin: 10px 0; border-radius: 0 6px 6px 0;
+  }
+  .guide .strat-name { font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+  .guide .strat-step { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  footer {
+    margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border);
+    text-align: center; color: var(--muted); font-size: 11px;
+  }
+  footer a { color: var(--accent); }
 
   @media (max-width: 720px) {
-    body { padding: 12px 8px; }
-    .majors, .averages { grid-template-columns: 1fr 1fr; }
-    .averages { grid-template-columns: 1fr; }
-    h1 { font-size: 20px; }
-    .major-price { font-size: 22px; }
-    table { font-size: 11px; }
-    th, td { padding: 5px 6px; }
+    body { padding: 10px 6px; font-size: 13px; }
+    .majors, .avg-grid { grid-template-columns: 1fr; }
+    .major-changes { grid-template-columns: repeat(2, 1fr); }
+    h1 { font-size: 18px; }
+    .major-price { font-size: 18px; }
+    table { font-size: 10px; }
+    th, td { padding: 4px 5px; }
+    .tab { padding: 7px 10px; font-size: 11px; }
   }
 </style>
 </head>
@@ -145,202 +205,340 @@
 <div class="container">
 
   <header>
-    <h1>MEXC 先物 ボラティリティトラッカー</h1>
-    <p class="sub">5分足 / 15分足 / 1時間足 ― 直近 20 本のリアル化ボラティリティ</p>
+    <h1>MEXC 先物 デイトレード スキャナー</h1>
+    <p class="sub">5m / 15m / 1h ボラ Top10 + 出来高 + FR + OI + ゲイナー / ルーザー + BTC/ETH</p>
   </header>
 
   <div class="controls">
     <button class="fetch" id="fetchBtn">データ取得</button>
-    <div class="status" id="status">クリックで最新データを取得</div>
+    <button class="secondary" id="guideBtn">使い方ガイド</button>
+    <div class="status" id="status">クリックで全データ更新</div>
   </div>
 
   <div id="errors"></div>
 
-  <div class="majors" id="majors" style="display:none;">
-    <div class="major-card" id="btc-card"></div>
-    <div class="major-card" id="eth-card"></div>
+  <div class="tabs" id="tabs" style="display:none;">
+    <div class="tab active" data-tab="scanner">スキャナー</div>
+    <div class="tab" data-tab="movers">急騰急落</div>
+    <div class="tab" data-tab="guide">使い方</div>
   </div>
 
-  <div class="averages" id="averages" style="display:none;"></div>
+  <!-- スキャナータブ -->
+  <div class="tab-content active" id="tab-scanner">
+    <div class="majors" id="majors" style="display:none;">
+      <div class="major-card" id="btc-card"></div>
+      <div class="major-card" id="eth-card"></div>
+    </div>
+    <div class="avg-grid" id="averages" style="display:none;"></div>
+    <div id="results"></div>
+  </div>
 
-  <div id="results"></div>
+  <!-- 急騰急落タブ -->
+  <div class="tab-content" id="tab-movers">
+    <div id="movers-content"></div>
+  </div>
+
+  <!-- 使い方タブ -->
+  <div class="tab-content" id="tab-guide">
+    <div class="guide">
+      <h2>このサイトの使い方（デイトレード向け推奨パターン）</h2>
+
+      <h3>表示データの意味</h3>
+      <ul>
+        <li><code>年率ボラ</code>: 直近 20 本の log return 標準偏差 × √(periods/year) × 100。 大きいほど短期変動が激しい</li>
+        <li><code>FR</code>: funding rate（永久先物の保有コスト）。 正 = long が short に支払う / 負 = short が long に支払う。 ±0.05% 超は極端</li>
+        <li><code>OI</code>: open interest（建玉総額 USD）。 OI が増えながら価格上昇 = 強い trend / OI 減少しながら上昇 = short squeeze 疑い</li>
+        <li><code>出来高</code>: 過去 24h 約定額（USD）。 $50M 未満は spread/slippage で本来エッジを食う</li>
+      </ul>
+
+      <h3>推奨パターン 1 — ブレイクアウトモメンタム（順張り）</h3>
+      <div class="strat">
+        <div class="strat-name">条件: 5m ボラ Top + 24h ゲイナー Top の重複 + 出来高 &gt;$100M</div>
+        <div class="strat-step">① 5m ボラランキングを確認 → ② 急騰急落タブで上昇率 Top と照合 → ③ 両方に入っている銘柄 = 「動いている」</div>
+        <div class="strat-step">④ FR が正で OI 増加 = 順張り（小さく入って trailing stop で伸ばす）</div>
+        <div class="strat-step">⑤ FR が極端正（&gt;0.1%）= 過熱、 利確優先 ＋ 大きく取らない</div>
+      </div>
+
+      <h3>推奨パターン 2 — ミーンリバージョン（逆張り）</h3>
+      <div class="strat">
+        <div class="strat-name">条件: 5m ボラ Top + 24h ルーザー Top + FR 極端負（&lt;-0.05%）</div>
+        <div class="strat-step">① 急騰急落タブで -10% 以上の急落銘柄を探す → ② 5m ボラも上位 = panic selling</div>
+        <div class="strat-step">③ FR が深く負 = short crowded → squeeze の risk-reward が良い</div>
+        <div class="strat-step">④ 損切りは直近 swing low の下 / 利確は VWAP or 5m EMA20</div>
+      </div>
+
+      <h3>推奨パターン 3 — BTC 連動回避 + alt 個別 setup</h3>
+      <div class="strat">
+        <div class="strat-name">条件: BTC 5m/15m が ±0.5% 以内（小動き） + alt の独立した強さ</div>
+        <div class="strat-step">① BTC/ETH カードの 5m / 15m が ±0.5% 内なら macro fundamental neutral と判断</div>
+        <div class="strat-step">② alt 個別の ボラ Top が BTC 連動でなく独自材料で動いている可能性 = pure alpha</div>
+        <div class="strat-step">③ BTC が ±2% 以上動いている時は alt 個別 setup を無視（連れ安連れ高で flat になる）</div>
+      </div>
+
+      <h3>推奨パターン 4 — 平均ボラとの比較で「動いてる時間帯」検出</h3>
+      <div class="strat">
+        <div class="strat-name">条件: 全銘柄平均ボラが急上昇 = 市場全体が動く時間帯</div>
+        <div class="strat-step">① 3 時間軸の平均ボラを記憶 / 定点観測（数時間おきに数回測る）</div>
+        <div class="strat-step">② 平均ボラが通常の 1.5 倍以上 = 大型イベント or 米国指標発表時間 = position size 縮小</div>
+        <div class="strat-step">③ 平均ボラが通常の 0.5 倍以下 = レンジ / mean-revert 戦略の温床</div>
+      </div>
+
+      <h3>推奨パターン 5 — Funding rate アービ（基本）</h3>
+      <div class="strat">
+        <div class="strat-name">条件: FR ±0.1% 超え銘柄 + 出来高 &gt;$50M</div>
+        <div class="strat-step">① BTC/ETH カードの FR を必ず確認、 funding 次回時刻まで何時間あるか把握（8h cycle）</div>
+        <div class="strat-step">② 極端 FR は逆方向ポジション保有で 8h ごとに収益化、 但し基礎 price risk あり → 必ず spot or 別venue で hedge</div>
+        <div class="strat-step">③ FR 単独で取りに行くのは「funding rate carry」戦略、 day trade としては副次的</div>
+      </div>
+
+      <h3>避けるべきパターン</h3>
+      <ul>
+        <li><strong>出来高 $20M 以下の銘柄</strong>: bid-ask spread が広く、 sl/tp で本来エッジ消失</li>
+        <li><strong>OI 急減 + 価格急上昇</strong>: short covering 疑い、 持続性低い</li>
+        <li><strong>BTC が急変動中の alt setup</strong>: 個別シグナルが BTC 連動でかき消される</li>
+        <li><strong>FR が極端正で long entry</strong>: position コスト + 過熱で逆張りに食われやすい</li>
+        <li><strong>1h ボラ Top のみで判断</strong>: 過去の動きで、 今動いてるとは限らない → 5m も確認</li>
+      </ul>
+
+      <h3>運用 tips</h3>
+      <ul>
+        <li><strong>更新頻度</strong>: 1-5 分おきに「データ取得」 ボタンを押すと最新値で再計算</li>
+        <li><strong>セッション選び</strong>: 日本時間 16:00 (欧州 OP) / 22:00 (米国 OP) / 翌 04:00 (CME close) で平均ボラ確認</li>
+        <li><strong>BTC dominance 利用</strong>: BTC が小動き = alt 個別シグナルが効きやすい / BTC 急変動 = 連動 trade のみ</li>
+        <li><strong>マルチ時間軸の合致</strong>: 5m と 15m の両方で ボラ Top にいる銘柄は「持続性が高い」 signal</li>
+        <li><strong>記録</strong>: 上位銘柄のスクショを取って、 1h 後の動きを後検証 → 自分の判断 hit rate を測る</li>
+      </ul>
+    </div>
+  </div>
 
   <div class="empty" id="empty">
-    上の「データ取得」 ボタンをクリックすると、 MEXC 先物の全 USDT 永久銘柄から、
-    各時間軸の直近 20 本のリターン標準偏差（年率換算ボラティリティ）を計算し、
-    上位 10 銘柄 ・ 全銘柄平均 ・ BTC/ETH の方向を表示します。
+    上の「データ取得」 ボタンをクリックすると、 MEXC 先物の上位 80 銘柄について、
+    5 分足 ・ 15 分足 ・ 1 時間足の年率換算ボラティリティ Top 10 と、
+    24h 急騰急落 ・ funding rate ・ open interest ・ BTC/ETH の方向を取得します。
+    （初回 約 40〜60 秒。 再取得は ボタンで再実行）
   </div>
 
   <footer>
-    データソース: MEXC 公開 API （contract.mexc.com） ／
-    計算: log return の std × √(periods/year) ×100 ／
-    GitHub: <a href="https://github.com/harukiman/mexc-volatility-tracker" style="color:var(--accent);">harukiman/mexc-volatility-tracker</a>
+    データソース: MEXC 公開 API ／ ゼロバックエンド ／
+    <a href="https://github.com/harukiman/mexc-volatility-tracker">harukiman/mexc-volatility-tracker</a>
   </footer>
 </div>
 
 <script>
 const TIMEFRAMES = [
-  { interval: 'Min5',  label: '5 分足',  minutes: 5,  periodsPerYear: 105120 },  // 60*24*365/5
+  { interval: 'Min5',  label: '5 分足',  minutes: 5,  periodsPerYear: 105120 },
   { interval: 'Min15', label: '15 分足', minutes: 15, periodsPerYear: 35040 },
   { interval: 'Min60', label: '1 時間足', minutes: 60, periodsPerYear: 8760 },
 ];
-
 const TOP_N = 10;
-const KLINE_LIMIT = 30;  // 直近30本（std計算には20本使う）
+const KLINE_LIMIT = 30;
 const VOL_WINDOW = 20;
-const MAX_SYMBOLS_PER_TF = 80;  // 上位 80 出来高銘柄に限定して計算
-
+const MAX_SYMBOLS = 80;
 const API_BASE = 'https://contract.mexc.com/api/v1/contract';
 
 function setStatus(msg, withSpinner = false) {
-  const el = document.getElementById('status');
-  el.innerHTML = withSpinner ? `<span class="spinner"></span>${msg}` : msg;
+  document.getElementById('status').innerHTML =
+    withSpinner ? `<span class="spinner"></span>${msg}` : msg;
 }
-
 function showError(msg) {
-  const errDiv = document.getElementById('errors');
-  errDiv.innerHTML += `<div class="err">⚠ ${msg}</div>`;
+  document.getElementById('errors').innerHTML += `<div class="err">⚠ ${msg}</div>`;
 }
-
-function clearErrors() {
-  document.getElementById('errors').innerHTML = '';
-}
+function clearErrors() { document.getElementById('errors').innerHTML = ''; }
 
 async function fetchJSON(url) {
   const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const j = await r.json();
-  if (j.success === false) throw new Error(`API error: ${j.message || 'unknown'}`);
+  if (j.success === false) throw new Error(`API: ${j.message || 'fail'}`);
   return j;
 }
 
-// 全 ticker（USDT 永久銘柄）を取得して、 出来高順にソート
 async function fetchAllTickers() {
   const j = await fetchJSON(`${API_BASE}/ticker`);
-  // フィルター: USDT 建てのみ、 amount24（出来高） で降順
-  const usdtTickers = j.data.filter(t => t.symbol && t.symbol.endsWith('_USDT'));
-  usdtTickers.sort((a, b) => parseFloat(b.amount24 || 0) - parseFloat(a.amount24 || 0));
-  return usdtTickers;
+  const usdt = j.data.filter(t => t.symbol && t.symbol.endsWith('_USDT'));
+  usdt.sort((a, b) => parseFloat(b.amount24 || 0) - parseFloat(a.amount24 || 0));
+  return usdt;
 }
 
-// 1 銘柄の klines 取得
 async function fetchKlines(symbol, interval) {
-  // MEXC は start パラメータ必須っぽいので、 適当な過去時刻
   const end = Math.floor(Date.now() / 1000);
   const minutes = TIMEFRAMES.find(tf => tf.interval === interval).minutes;
   const start = end - minutes * 60 * (KLINE_LIMIT + 5);
-  const url = `${API_BASE}/kline/${symbol}?interval=${interval}&start=${start}&end=${end}`;
-  const j = await fetchJSON(url);
+  const j = await fetchJSON(`${API_BASE}/kline/${symbol}?interval=${interval}&start=${start}&end=${end}`);
   return j.data;
 }
 
-// kline data から std return（年率換算 vol %）を計算
 function calcVolatility(klineData, periodsPerYear) {
-  // klineData は { time: [...], close: [...], ... } 形式
   const closes = klineData.close;
   if (!closes || closes.length < VOL_WINDOW + 1) return null;
   const recent = closes.slice(-VOL_WINDOW - 1);
-  const returns = [];
+  const rets = [];
   for (let i = 1; i < recent.length; i++) {
-    const r = Math.log(parseFloat(recent[i]) / parseFloat(recent[i-1]));
-    returns.push(r);
+    rets.push(Math.log(parseFloat(recent[i]) / parseFloat(recent[i-1])));
   }
-  const mean = returns.reduce((a,b) => a+b, 0) / returns.length;
-  const variance = returns.reduce((a,b) => a + (b-mean)**2, 0) / returns.length;
-  const std = Math.sqrt(variance);
-  const annualized = std * Math.sqrt(periodsPerYear) * 100;  // %
-  return annualized;
+  const mean = rets.reduce((a,b)=>a+b, 0) / rets.length;
+  const variance = rets.reduce((a,b)=>a + (b-mean)**2, 0) / rets.length;
+  return Math.sqrt(variance) * Math.sqrt(periodsPerYear) * 100;
 }
 
-// 並列バッチ取得
-async function fetchVolForSymbols(symbols, interval, periodsPerYear, batchSize = 10) {
+// ATR % (高値-安値 平均 / 終値)
+function calcATR(klineData) {
+  const high = klineData.high, low = klineData.low, close = klineData.close;
+  if (!high || high.length < VOL_WINDOW) return null;
+  const n = Math.min(VOL_WINDOW, high.length);
+  let sum = 0;
+  for (let i = 0; i < n; i++) {
+    sum += (parseFloat(high[high.length - 1 - i]) - parseFloat(low[low.length - 1 - i]));
+  }
+  const avgRange = sum / n;
+  const lastClose = parseFloat(close[close.length - 1]);
+  return (avgRange / lastClose) * 100;
+}
+
+async function fetchMetricsForSymbols(symbols, interval, periodsPerYear, batchSize = 10) {
   const results = [];
   for (let i = 0; i < symbols.length; i += batchSize) {
     const batch = symbols.slice(i, i + batchSize);
     const promises = batch.map(async (sym) => {
       try {
         const k = await fetchKlines(sym, interval);
-        const vol = calcVolatility(k, periodsPerYear);
-        return { symbol: sym, vol };
+        return { symbol: sym, vol: calcVolatility(k, periodsPerYear), atr: calcATR(k) };
       } catch (e) {
-        return { symbol: sym, vol: null, error: e.message };
+        return { symbol: sym, vol: null, atr: null, error: e.message };
       }
     });
-    const batchResults = await Promise.all(promises);
-    results.push(...batchResults);
-    // 進捗更新
-    setStatus(`${interval} データ取得中 ${results.length}/${symbols.length}`, true);
-    // レート制限緩和
-    await new Promise(r => setTimeout(r, 100));
+    const br = await Promise.all(promises);
+    results.push(...br);
+    setStatus(`${interval} 計算中 ${results.length}/${symbols.length}`, true);
+    await new Promise(r => setTimeout(r, 80));
   }
   return results.filter(r => r.vol !== null && !isNaN(r.vol));
 }
 
-function renderMajor(ticker, klineDataByTf) {
-  // klineDataByTf: { 'Min5': { close, time }, 'Min15': {...}, 'Min60': {...} }
-  const price = parseFloat(ticker.lastPrice);
-  const rise24 = parseFloat(ticker.riseFallRate) * 100;  // 24h % change
-  const dir24 = rise24 >= 0 ? 'up' : 'down';
-  const arrow24 = rise24 >= 0 ? '▲' : '▼';
+function fmtUSD(v, digits = 0) {
+  v = parseFloat(v);
+  if (isNaN(v)) return '-';
+  if (v >= 1e9) return '$' + (v/1e9).toFixed(2) + 'B';
+  if (v >= 1e6) return '$' + (v/1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return '$' + (v/1e3).toFixed(0) + 'K';
+  return '$' + v.toFixed(digits);
+}
+function fmtPct(v, digits = 2, sign = false) {
+  v = parseFloat(v);
+  if (isNaN(v)) return '-';
+  const s = sign && v >= 0 ? '+' : '';
+  return s + v.toFixed(digits) + '%';
+}
+function fmtFR(v) {
+  // funding rate を % で 4 桁
+  v = parseFloat(v) * 100;
+  if (isNaN(v)) return '-';
+  const s = v >= 0 ? '+' : '';
+  return s + v.toFixed(4) + '%';
+}
+function fundingTimeRemaining(nextSettleTime) {
+  if (!nextSettleTime) return '-';
+  const ms = nextSettleTime - Date.now();
+  if (ms <= 0) return 'まもなく';
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return `${h}h ${m}m`;
+}
 
-  // 各時間軸の price change（最新 close ÷ N 本前 close - 1）
+function renderMajor(ticker, klineDataByTf) {
+  const price = parseFloat(ticker.lastPrice);
+  const rise24 = parseFloat(ticker.riseFallRate) * 100;
+  const fr = ticker.fundingRate || 0;
+  const oi = parseFloat(ticker.holdVol || 0) * price;
+  const vol24 = parseFloat(ticker.amount24 || 0);
+
   const tfChanges = {};
   for (const tf of TIMEFRAMES) {
     const k = klineDataByTf[tf.interval];
     if (k && k.close && k.close.length >= 2) {
       const closes = k.close.map(parseFloat);
-      const change = (closes[closes.length-1] / closes[0] - 1) * 100;
-      tfChanges[tf.label] = change;
-    } else {
-      tfChanges[tf.label] = null;
-    }
+      tfChanges[tf.label] = (closes[closes.length-1] / closes[0] - 1) * 100;
+    } else { tfChanges[tf.label] = null; }
   }
 
+  const cls24 = rise24 >= 0 ? 'up' : 'down';
+  const arr24 = rise24 >= 0 ? '▲' : '▼';
+
   let changesHTML = `
-    <div class="major-change-item">
-      <span class="lbl">24h:</span>
-      <span class="${dir24}">${arrow24} ${rise24.toFixed(2)}%</span>
+    <div>
+      <span class="lbl">24h</span>
+      <span class="val ${cls24}">${arr24} ${Math.abs(rise24).toFixed(2)}%</span>
     </div>
   `;
   for (const [label, change] of Object.entries(tfChanges)) {
     if (change === null) continue;
-    const dir = change >= 0 ? 'up' : 'down';
-    const arrow = change >= 0 ? '▲' : '▼';
+    const cls = change >= 0 ? 'up' : 'down';
+    const arr = change >= 0 ? '▲' : '▼';
     changesHTML += `
-      <div class="major-change-item">
-        <span class="lbl">${label}:</span>
-        <span class="${dir}">${arrow} ${Math.abs(change).toFixed(2)}%</span>
+      <div>
+        <span class="lbl">${label}</span>
+        <span class="val ${cls}">${arr} ${Math.abs(change).toFixed(2)}%</span>
       </div>
     `;
   }
 
+  const frPct = parseFloat(fr) * 100;
+  const frCls = frPct > 0.05 ? 'down' : frPct < -0.05 ? 'up' : 'neutral';
+  const nextSettle = ticker.nextSettleTime ? new Date(ticker.nextSettleTime).getTime() : null;
+
   return `
-    <div class="major-name">${ticker.symbol}</div>
-    <div class="major-price">$${price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</div>
+    <div class="major-row">
+      <div>
+        <div class="major-name">${ticker.symbol}</div>
+        <div class="major-price">$${price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</div>
+      </div>
+    </div>
     <div class="major-changes">${changesHTML}</div>
+    <div class="funding-info">
+      <span>FR: <span class="${frCls}">${fmtFR(fr)}</span></span>
+      <span>次 FR: ${fundingTimeRemaining(nextSettle)}</span>
+      <span>OI: ${fmtUSD(oi)}</span>
+      <span>24h Vol: ${fmtUSD(vol24)}</span>
+    </div>
   `;
 }
 
-function renderTopTable(timeframe, volData, tickerMap) {
+function renderTopTable(volData, tickerMap) {
   const sorted = [...volData].sort((a, b) => b.vol - a.vol);
   const top = sorted.slice(0, TOP_N);
   const maxVol = top[0]?.vol || 1;
 
   let rows = '';
   top.forEach((item, idx) => {
-    const ticker = tickerMap[item.symbol];
-    const price = ticker ? parseFloat(ticker.lastPrice) : null;
-    const rise24 = ticker ? parseFloat(ticker.riseFallRate) * 100 : null;
+    const t = tickerMap[item.symbol];
+    if (!t) return;
+    const price = parseFloat(t.lastPrice);
+    const rise24 = parseFloat(t.riseFallRate) * 100;
+    const fr = parseFloat(t.fundingRate || 0) * 100;
+    const oi = parseFloat(t.holdVol || 0) * price;
+    const vol24 = parseFloat(t.amount24 || 0);
     const dir = rise24 >= 0 ? 'up' : 'down';
-    const arrow = rise24 >= 0 ? '▲' : '▼';
-    const barWidth = Math.min((item.vol / maxVol) * 80, 80);
+    const arr = rise24 >= 0 ? '▲' : '▼';
+    const barW = Math.min((item.vol / maxVol) * 60, 60);
+
+    // タグ判定
+    let tags = '';
+    if (rise24 > 10) tags += '<span class="tag hot">急騰</span>';
+    else if (rise24 < -10) tags += '<span class="tag cool">急落</span>';
+    if (vol24 < 20e6) tags += '<span class="tag warn">低流動</span>';
+    if (Math.abs(fr) > 0.05) tags += '<span class="tag warn">FR極端</span>';
+
     rows += `
       <tr>
         <td class="rank">${idx + 1}</td>
-        <td class="sym">${item.symbol.replace('_USDT', '')}</td>
-        <td>${price ? '$' + price.toLocaleString('en-US', {maximumFractionDigits: 6}) : '-'}</td>
-        <td>${item.vol.toFixed(1)}%<span class="vol-bar" style="width:${barWidth}px;"></span></td>
-        <td class="${dir}">${arrow} ${rise24 !== null ? Math.abs(rise24).toFixed(2) + '%' : '-'}</td>
+        <td class="sym">${item.symbol.replace('_USDT', '')}${tags}</td>
+        <td>$${price.toLocaleString('en-US', {maximumFractionDigits: 6})}</td>
+        <td>${item.vol.toFixed(1)}%<span class="vol-bar" style="width:${barW}px;"></span></td>
+        <td>${item.atr ? item.atr.toFixed(2) + '%' : '-'}</td>
+        <td class="${dir}">${arr} ${Math.abs(rise24).toFixed(2)}%</td>
+        <td class="${fr > 0.05 ? 'down' : fr < -0.05 ? 'up' : 'neutral'}">${fmtFR(t.fundingRate || 0)}</td>
+        <td>${fmtUSD(vol24)}</td>
+        <td>${fmtUSD(oi)}</td>
       </tr>
     `;
   });
@@ -353,11 +551,68 @@ function renderTopTable(timeframe, volData, tickerMap) {
           <th>銘柄</th>
           <th>価格</th>
           <th>年率ボラ</th>
+          <th>ATR</th>
           <th>24h 変動</th>
+          <th>FR</th>
+          <th>出来高</th>
+          <th>OI</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
+  `;
+}
+
+function renderMoversTable(tickers, title, color) {
+  const top = tickers.slice(0, 15);
+  let rows = '';
+  top.forEach((t, idx) => {
+    const price = parseFloat(t.lastPrice);
+    const rise24 = parseFloat(t.riseFallRate) * 100;
+    const fr = parseFloat(t.fundingRate || 0) * 100;
+    const oi = parseFloat(t.holdVol || 0) * price;
+    const vol24 = parseFloat(t.amount24 || 0);
+    const dir = rise24 >= 0 ? 'up' : 'down';
+    const arr = rise24 >= 0 ? '▲' : '▼';
+
+    let tags = '';
+    if (vol24 < 20e6) tags += '<span class="tag warn">低流動</span>';
+    if (Math.abs(fr) > 0.05) tags += '<span class="tag warn">FR極端</span>';
+
+    rows += `
+      <tr>
+        <td class="rank">${idx + 1}</td>
+        <td class="sym">${t.symbol.replace('_USDT', '')}${tags}</td>
+        <td>$${price.toLocaleString('en-US', {maximumFractionDigits: 6})}</td>
+        <td class="${dir}">${arr} ${Math.abs(rise24).toFixed(2)}%</td>
+        <td class="${fr > 0.05 ? 'down' : fr < -0.05 ? 'up' : 'neutral'}">${fmtFR(t.fundingRate || 0)}</td>
+        <td>${fmtUSD(vol24)}</td>
+        <td>${fmtUSD(oi)}</td>
+      </tr>
+    `;
+  });
+
+  return `
+    <div class="tf-section">
+      <div class="tf-title">
+        <span style="color:${color};">${title}</span>
+        <span class="tf-meta">24h riseFallRate ベース / Top ${top.length}</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th class="rank">#</th>
+            <th>銘柄</th>
+            <th>価格</th>
+            <th>24h 変動</th>
+            <th>FR</th>
+            <th>出来高</th>
+            <th>OI</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -368,52 +623,41 @@ async function runFetch() {
   clearErrors();
   setStatus('全銘柄リスト取得中...', true);
   document.getElementById('empty').style.display = 'none';
+  document.getElementById('tabs').style.display = 'flex';
   document.getElementById('results').innerHTML = '';
   document.getElementById('averages').innerHTML = '';
+  document.getElementById('movers-content').innerHTML = '';
 
   try {
-    // 1. 全ティッカー
     const allTickers = await fetchAllTickers();
-    if (!allTickers.length) throw new Error('ティッカーが取得できません');
+    if (!allTickers.length) throw new Error('ticker 取得失敗');
     const tickerMap = Object.fromEntries(allTickers.map(t => [t.symbol, t]));
+    const topSymbols = allTickers.slice(0, MAX_SYMBOLS).map(t => t.symbol);
 
-    // 2. 上位 N 銘柄に絞る（出来高順）
-    const topSymbols = allTickers.slice(0, MAX_SYMBOLS_PER_TF).map(t => t.symbol);
-    const totalSyms = topSymbols.length;
-
-    // 3. BTC/ETH の klines を全 TF で取得
-    const majorSymbols = ['BTC_USDT', 'ETH_USDT'];
+    // BTC/ETH klines
     const majorKlines = {};
-    for (const sym of majorSymbols) {
+    for (const sym of ['BTC_USDT', 'ETH_USDT']) {
       majorKlines[sym] = {};
       for (const tf of TIMEFRAMES) {
-        try {
-          majorKlines[sym][tf.interval] = await fetchKlines(sym, tf.interval);
-        } catch (e) {
-          showError(`${sym} ${tf.interval} 取得失敗: ${e.message}`);
-        }
+        try { majorKlines[sym][tf.interval] = await fetchKlines(sym, tf.interval); }
+        catch (e) { showError(`${sym} ${tf.interval}: ${e.message}`); }
       }
     }
 
-    // 4. BTC/ETH カード描画
+    // BTC/ETH カード
     document.getElementById('majors').style.display = 'grid';
     if (tickerMap['BTC_USDT']) {
-      document.getElementById('btc-card').innerHTML = renderMajor(
-        tickerMap['BTC_USDT'], majorKlines['BTC_USDT'] || {}
-      );
+      document.getElementById('btc-card').innerHTML = renderMajor(tickerMap['BTC_USDT'], majorKlines['BTC_USDT'] || {});
     }
     if (tickerMap['ETH_USDT']) {
-      document.getElementById('eth-card').innerHTML = renderMajor(
-        tickerMap['ETH_USDT'], majorKlines['ETH_USDT'] || {}
-      );
+      document.getElementById('eth-card').innerHTML = renderMajor(tickerMap['ETH_USDT'], majorKlines['ETH_USDT'] || {});
     }
 
-    // 5. 各時間軸の vol を計算
-    const avgHTML = [];
-    const sectionHTML = [];
+    // 各時間軸のボラ計算
+    const avgHTML = []; const sectionHTML = [];
     for (const tf of TIMEFRAMES) {
-      setStatus(`${tf.label} のボラティリティを ${totalSyms} 銘柄で計算中...`, true);
-      const volData = await fetchVolForSymbols(topSymbols, tf.interval, tf.periodsPerYear);
+      setStatus(`${tf.label} ボラ計算中 (${topSymbols.length} 銘柄)`, true);
+      const volData = await fetchMetricsForSymbols(topSymbols, tf.interval, tf.periodsPerYear);
       const avgVol = volData.length ? volData.reduce((s, x) => s + x.vol, 0) / volData.length : 0;
 
       avgHTML.push(`
@@ -430,17 +674,23 @@ async function runFetch() {
             <span>${tf.label} ボラ Top ${TOP_N}</span>
             <span class="tf-meta">直近 ${VOL_WINDOW} 本 / 計算対象 ${volData.length} 銘柄</span>
           </div>
-          ${renderTopTable(tf, volData, tickerMap)}
+          ${renderTopTable(volData, tickerMap)}
         </div>
       `);
     }
-
     document.getElementById('averages').innerHTML = avgHTML.join('');
     document.getElementById('averages').style.display = 'grid';
     document.getElementById('results').innerHTML = sectionHTML.join('');
 
+    // 急騰急落
+    const gainers = [...allTickers].sort((a, b) => parseFloat(b.riseFallRate) - parseFloat(a.riseFallRate));
+    const losers = [...allTickers].sort((a, b) => parseFloat(a.riseFallRate) - parseFloat(b.riseFallRate));
+    document.getElementById('movers-content').innerHTML =
+      renderMoversTable(gainers, '24h ゲイナー Top 15', 'var(--up)') +
+      renderMoversTable(losers, '24h ルーザー Top 15', 'var(--down)');
+
     const now = new Date();
-    setStatus(`完了 ${now.toLocaleString('ja-JP')} / 計算対象 ${totalSyms} 銘柄 × 3 時間軸`);
+    setStatus(`完了 ${now.toLocaleTimeString('ja-JP')} / ${topSymbols.length} 銘柄 × 3 時間軸 / 全 ${allTickers.length} 銘柄から急騰急落抽出`);
   } catch (e) {
     showError(`エラー: ${e.message}`);
     setStatus('取得失敗');
@@ -451,6 +701,26 @@ async function runFetch() {
 }
 
 document.getElementById('fetchBtn').addEventListener('click', runFetch);
+
+// タブ切替
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// 使い方ボタン
+document.getElementById('guideBtn').addEventListener('click', () => {
+  document.getElementById('tabs').style.display = 'flex';
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('[data-tab="guide"]').classList.add('active');
+  document.getElementById('tab-guide').classList.add('active');
+  document.getElementById('empty').style.display = 'none';
+});
 </script>
 </body>
 </html>
