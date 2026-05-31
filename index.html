@@ -212,6 +212,20 @@
   <div class="controls">
     <button class="fetch" id="fetchBtn">データ取得</button>
     <button class="secondary" id="guideBtn">使い方ガイド</button>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;">
+      <input type="checkbox" id="autoRefresh" style="cursor:pointer;">
+      自動更新 60s
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);">
+      最低出来高:
+      <select id="volFilter" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;">
+        <option value="0">フィルタなし</option>
+        <option value="20000000">$20M 以上</option>
+        <option value="50000000" selected>$50M 以上</option>
+        <option value="100000000">$100M 以上</option>
+        <option value="500000000">$500M 以上</option>
+      </select>
+    </label>
     <div class="status" id="status">クリックで全データ更新</div>
   </div>
 
@@ -219,6 +233,7 @@
 
   <div class="tabs" id="tabs" style="display:none;">
     <div class="tab active" data-tab="scanner">スキャナー</div>
+    <div class="tab" data-tab="agreement">マルチ時間軸合致</div>
     <div class="tab" data-tab="movers">急騰急落</div>
     <div class="tab" data-tab="guide">使い方</div>
   </div>
@@ -231,6 +246,19 @@
     </div>
     <div class="avg-grid" id="averages" style="display:none;"></div>
     <div id="results"></div>
+  </div>
+
+  <!-- マルチ時間軸合致タブ -->
+  <div class="tab-content" id="tab-agreement">
+    <div class="tf-section">
+      <div class="tf-title">
+        <span style="color:var(--purple);">マルチ時間軸合致銘柄（5m + 15m + 1h 全てで ボラ Top 20 入り）</span>
+        <span class="tf-meta">持続性 highest = trend 確信度が最高</span>
+      </div>
+      <div id="agreement-content" style="font-size:13px;color:var(--muted);padding:12px;">
+        データ取得後に表示されます。 3 時間軸全てで上位 20 に入っている銘柄は、 短期 / 中期 / 長期で一貫したボラを示す = 持続性が最も高い setup。
+      </div>
+    </div>
   </div>
 
   <!-- 急騰急落タブ -->
@@ -655,9 +683,11 @@ async function runFetch() {
 
     // 各時間軸のボラ計算
     const avgHTML = []; const sectionHTML = [];
+    window.__lastVolByTf = {};  // マルチ時間軸合致用に保管
     for (const tf of TIMEFRAMES) {
       setStatus(`${tf.label} ボラ計算中 (${topSymbols.length} 銘柄)`, true);
       const volData = await fetchMetricsForSymbols(topSymbols, tf.interval, tf.periodsPerYear);
+      window.__lastVolByTf[tf.interval] = volData;
       const avgVol = volData.length ? volData.reduce((s, x) => s + x.vol, 0) / volData.length : 0;
 
       avgHTML.push(`
@@ -683,11 +713,73 @@ async function runFetch() {
     document.getElementById('results').innerHTML = sectionHTML.join('');
 
     // 急騰急落
-    const gainers = [...allTickers].sort((a, b) => parseFloat(b.riseFallRate) - parseFloat(a.riseFallRate));
-    const losers = [...allTickers].sort((a, b) => parseFloat(a.riseFallRate) - parseFloat(b.riseFallRate));
+    const minVol = parseFloat(document.getElementById('volFilter').value);
+    const filteredTickers = minVol > 0
+      ? allTickers.filter(t => parseFloat(t.amount24 || 0) >= minVol)
+      : allTickers;
+    const gainers = [...filteredTickers].sort((a, b) => parseFloat(b.riseFallRate) - parseFloat(a.riseFallRate));
+    const losers = [...filteredTickers].sort((a, b) => parseFloat(a.riseFallRate) - parseFloat(b.riseFallRate));
     document.getElementById('movers-content').innerHTML =
-      renderMoversTable(gainers, '24h ゲイナー Top 15', 'var(--up)') +
-      renderMoversTable(losers, '24h ルーザー Top 15', 'var(--down)');
+      renderMoversTable(gainers, `24h ゲイナー Top 15 ${minVol > 0 ? '(出来高 ' + fmtUSD(minVol) + ' 以上)' : ''}`, 'var(--up)') +
+      renderMoversTable(losers, `24h ルーザー Top 15 ${minVol > 0 ? '(出来高 ' + fmtUSD(minVol) + ' 以上)' : ''}`, 'var(--down)');
+
+    // マルチ時間軸合致 - 各時間軸の上位 20 銘柄の共通集合
+    window.__lastVolByTf = window.__lastVolByTf || {};
+    const tfRankings = window.__lastVolByTf;  // 各 tf の volData を保管
+    if (tfRankings['Min5'] && tfRankings['Min15'] && tfRankings['Min60']) {
+      const top20 = (data) => new Set(
+        [...data].sort((a, b) => b.vol - a.vol).slice(0, 20).map(x => x.symbol)
+      );
+      const set5  = top20(tfRankings['Min5']);
+      const set15 = top20(tfRankings['Min15']);
+      const set60 = top20(tfRankings['Min60']);
+      const intersection = [...set5].filter(s => set15.has(s) && set60.has(s));
+
+      if (intersection.length === 0) {
+        document.getElementById('agreement-content').innerHTML = '現在、 5m + 15m + 1h の全てで Top 20 に入る銘柄はありません。 単一時間軸の動きが多い相場（短期スパイクなど）です。';
+      } else {
+        const rows = intersection.map(sym => {
+          const t = tickerMap[sym];
+          const v5  = tfRankings['Min5'].find(x => x.symbol === sym)?.vol || 0;
+          const v15 = tfRankings['Min15'].find(x => x.symbol === sym)?.vol || 0;
+          const v60 = tfRankings['Min60'].find(x => x.symbol === sym)?.vol || 0;
+          const rise24 = parseFloat(t.riseFallRate) * 100;
+          const dir = rise24 >= 0 ? 'up' : 'down';
+          const arr = rise24 >= 0 ? '▲' : '▼';
+          const fr = parseFloat(t.fundingRate || 0) * 100;
+          return `
+            <tr>
+              <td class="sym">${sym.replace('_USDT','')}</td>
+              <td>${v5.toFixed(1)}%</td>
+              <td>${v15.toFixed(1)}%</td>
+              <td>${v60.toFixed(1)}%</td>
+              <td class="${dir}">${arr} ${Math.abs(rise24).toFixed(2)}%</td>
+              <td class="${fr > 0.05 ? 'down' : fr < -0.05 ? 'up' : 'neutral'}">${fmtFR(t.fundingRate || 0)}</td>
+              <td>${fmtUSD(parseFloat(t.amount24 || 0))}</td>
+            </tr>
+          `;
+        }).join('');
+        document.getElementById('agreement-content').innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>銘柄</th>
+                <th>5m ボラ</th>
+                <th>15m ボラ</th>
+                <th>1h ボラ</th>
+                <th>24h 変動</th>
+                <th>FR</th>
+                <th>出来高</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <p style="margin-top:12px;font-size:12px;color:var(--muted);">
+            ${intersection.length} 銘柄が 3 時間軸合致。 これらは「短期の異常」 ではなく、 ある程度の時間続いている持続性のあるボラ。 trend setup・ニュース絡みの可能性が高い。
+          </p>
+        `;
+      }
+    }
 
     const now = new Date();
     setStatus(`完了 ${now.toLocaleTimeString('ja-JP')} / ${topSymbols.length} 銘柄 × 3 時間軸 / 全 ${allTickers.length} 銘柄から急騰急落抽出`);
@@ -701,6 +793,35 @@ async function runFetch() {
 }
 
 document.getElementById('fetchBtn').addEventListener('click', runFetch);
+
+// 自動更新（60s 間隔）
+let autoTimer = null;
+let autoCountdown = null;
+document.getElementById('autoRefresh').addEventListener('change', (e) => {
+  if (e.target.checked) {
+    let sec = 60;
+    autoCountdown = setInterval(() => {
+      sec--;
+      if (sec <= 0) sec = 60;
+      const lbl = document.querySelector('label[for] input#autoRefresh') ||
+                  document.getElementById('autoRefresh').parentElement;
+      if (lbl) lbl.lastChild.textContent = ` 自動更新 ${sec}s`;
+    }, 1000);
+    autoTimer = setInterval(() => runFetch(), 60000);
+  } else {
+    clearInterval(autoTimer); clearInterval(autoCountdown);
+    autoTimer = autoCountdown = null;
+    document.getElementById('autoRefresh').parentElement.lastChild.textContent = ' 自動更新 60s';
+  }
+});
+
+// 出来高フィルタ変更で再描画（既存データから）
+document.getElementById('volFilter').addEventListener('change', () => {
+  // データ取得後の場合のみ再実行
+  if (document.getElementById('movers-content').innerHTML) {
+    runFetch();
+  }
+});
 
 // タブ切替
 document.querySelectorAll('.tab').forEach(tab => {
