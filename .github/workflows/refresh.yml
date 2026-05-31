@@ -1,0 +1,35 @@
+name: Refresh MEXC Data
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # 5 分毎
+  workflow_dispatch:        # 手動実行も可
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Fetch MEXC data
+        run: python fetch_data.py
+
+      - name: Commit data.json if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "auto-refresh data.json $(date -u +%FT%TZ)"
+            git push
+          fi
