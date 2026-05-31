@@ -174,6 +174,147 @@ def main():
     gainers = sorted(all_tickers, key=lambda t: float(t.get('riseFallRate', 0) or 0), reverse=True)[:15]
     losers = sorted(all_tickers, key=lambda t: float(t.get('riseFallRate', 0) or 0))[:15]
 
+    # 6.5. ロング/ショート シグナル生成（複合スコアリング）
+    # 各 symbol の metrics を統合
+    sym_metrics = {}
+    for tf_key in ['Min5', 'Min15', 'Min60']:
+        for item in vol_by_tf.get(tf_key, []):
+            sym = item['symbol']
+            if sym not in sym_metrics:
+                sym_metrics[sym] = {}
+            sym_metrics[sym][f'vol_{tf_key}'] = item['vol']
+            sym_metrics[sym][f'atr_{tf_key}'] = item.get('atr')
+
+    agreement_syms = set(item['symbol'] for item in agreement_data)
+
+    def score_long_short(sym, m, ticker):
+        """LONG / SHORT スコア + 期待値 % を計算"""
+        if sym not in ticker:
+            return None
+        t = ticker[sym]
+        price = float(t.get('lastPrice', 0) or 0)
+        rise24 = float(t.get('riseFallRate', 0) or 0) * 100  # %
+        fr = float(t.get('fundingRate', 0) or 0) * 100  # %
+        vol24 = float(t.get('amount24', 0) or 0)
+        atr_1h = m.get('atr_Min60')  # %
+        atr_5m = m.get('atr_Min5')
+        v5 = m.get('vol_Min5', 0) or 0
+        v15 = m.get('vol_Min15', 0) or 0
+        v60 = m.get('vol_Min60', 0) or 0
+
+        # 必要データ不足はスキップ
+        if not atr_1h or not v5 or not v15 or not v60 or price <= 0:
+            return None
+
+        # ─── LONG スコア (0-100) ───
+        long_score = 0
+        long_tags = []
+        if 2 <= rise24 <= 8:
+            long_score += 30; long_tags.append('uptrend')
+        elif 0 <= rise24 < 2:
+            long_score += 15; long_tags.append('weak-up')
+        elif rise24 > 15:
+            long_score -= 25; long_tags.append('overext')
+        if fr < -0.02:
+            long_score += 20; long_tags.append('short-crowded')
+        elif fr < 0.02:
+            long_score += 10
+        if fr > 0.1:
+            long_score -= 15
+        if v5 > v15 > v60:  # 加速度: 短期ほど大
+            long_score += 15; long_tags.append('accel')
+        if vol24 > 100e6:
+            long_score += 10; long_tags.append('liq+')
+        elif vol24 < 20e6:
+            long_score -= 15; long_tags.append('illiq')
+        if sym in agreement_syms:
+            long_score += 10; long_tags.append('multi-tf')
+
+        # ─── SHORT スコア (0-100) ───
+        short_score = 0
+        short_tags = []
+        if -8 <= rise24 <= -2:
+            short_score += 30; short_tags.append('downtrend')
+        elif -2 < rise24 <= 0:
+            short_score += 15; short_tags.append('weak-down')
+        elif rise24 < -15:
+            short_score -= 25; short_tags.append('oversold')
+        if fr > 0.05:
+            short_score += 20; short_tags.append('long-crowded')
+        if fr > 0.1:
+            short_score += 15; short_tags.append('extreme-fr')
+        if fr < -0.05:
+            short_score -= 10
+        if rise24 > 8 and fr > 0.05:  # 過熱 long 逆張り
+            short_score += 20; short_tags.append('fade-pump')
+        if v5 > v15:
+            short_score += 10
+        if vol24 > 100e6:
+            short_score += 10; short_tags.append('liq+')
+        elif vol24 < 20e6:
+            short_score -= 15; short_tags.append('illiq')
+        if sym in agreement_syms:
+            short_score += 10; short_tags.append('multi-tf')
+
+        # スコアを 0-100 にクリップ
+        long_score = max(0, min(100, long_score))
+        short_score = max(0, min(100, short_score))
+
+        # ─── 期待値 % (1h horizon) ───
+        # ATR(1h) は次 1h の平均レンジ → 方向確信度で reweight
+        # conviction = score / 100 で 0-1 にスケール
+        # conservative = atr/2 * conv / optimistic = atr * conv
+        long_conv = long_score / 100
+        short_conv = short_score / 100
+
+        long_ev = {
+            'conservative': round(atr_1h * 0.3 * long_conv, 2),
+            'central':      round(atr_1h * 0.6 * long_conv, 2),
+            'optimistic':   round(atr_1h * 1.0 * long_conv, 2),
+        }
+        short_ev = {
+            'conservative': round(-atr_1h * 0.3 * short_conv, 2),
+            'central':      round(-atr_1h * 0.6 * short_conv, 2),
+            'optimistic':   round(-atr_1h * 1.0 * short_conv, 2),
+        }
+
+        return {
+            'symbol': sym,
+            'long_score': long_score,
+            'short_score': short_score,
+            'long_ev': long_ev,
+            'short_ev': short_ev,
+            'long_tags': long_tags,
+            'short_tags': short_tags,
+            'atr_1h': round(atr_1h, 2),
+            'rise24': round(rise24, 2),
+            'fr': round(fr, 4),
+        }
+
+    signals = []
+    for sym, m in sym_metrics.items():
+        s = score_long_short(sym, m, ticker_map)
+        if s is not None:
+            signals.append(s)
+
+    # 閾値 30 以上を採択（少なくとも 2-3 ポジティブ要因あり）
+    long_top = sorted(
+        [s for s in signals if s['long_score'] >= 30],
+        key=lambda x: (x['long_score'], x['long_ev']['central']),
+        reverse=True
+    )[:10]
+    short_top = sorted(
+        [s for s in signals if s['short_score'] >= 30],
+        key=lambda x: (x['short_score'], abs(x['short_ev']['central'])),
+        reverse=True
+    )[:10]
+    print(f'  signals computed: total={len(signals)}, long(>=30)={len(long_top)}, short(>=30)={len(short_top)}')
+    if signals:
+        max_l = max(signals, key=lambda x: x['long_score'])
+        max_s = max(signals, key=lambda x: x['short_score'])
+        print(f'    max long: {max_l["symbol"]} score={max_l["long_score"]}')
+        print(f'    max short: {max_s["symbol"]} score={max_s["short_score"]}')
+
     # 7. 軽量化したティッカー情報（symbol -> { price, change24, fr, oi, vol24, next_fr }）
     def slim_ticker(t):
         price = float(t.get('lastPrice', 0) or 0)
@@ -210,6 +351,11 @@ def main():
         'agreement': agreement_data,
         'gainers': [slim_ticker(t) for t in gainers],
         'losers': [slim_ticker(t) for t in losers],
+        'signals': {
+            'long': long_top,
+            'short': short_top,
+            'methodology': '24h trend + funding rate + multi-TF vol acceleration + liquidity を統合した複合スコア (0-100)。 期待値 = ATR(1h) × 確信度係数。',
+        },
         'runtime_sec': round(time.time() - started, 1),
     }
 
